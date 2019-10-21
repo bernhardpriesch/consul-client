@@ -48,19 +48,9 @@ public class BlacklistingConsulFailoverStrategy implements ConsulFailoverStrateg
 			// Find the first entity that doesnt exist in the blacklist
 			Optional<HostAndPort> optionalNext = targets.stream().filter(target -> {
 
+				checkBlacklistTimeout (target);
 				// If we have blacklisted this key
 				if (blacklist.containsKey(target)) {
-
-					// Get when we blacklisted this key
-					final Instant blacklistWhen = blacklist.get(target);
-
-					// If !(Duration(then, now) - timeout >=0) means that we remove this blacklist
-					// entry when the duration between
-					// the blacklist marker and now is greater than the timeout duration
-					if (!Duration.between(blacklistWhen, Instant.now()).minusMillis(timeout).isNegative()) {
-						blacklist.remove(target);
-						return true;
-					} else
 						return false;
 				} else
 					return true;
@@ -91,7 +81,10 @@ public class BlacklistingConsulFailoverStrategy implements ConsulFailoverStrateg
 
 	@Override
 	public boolean isRequestViable(Request current) {
-		return (targets.size() > blacklist.size()) || !blacklist.containsKey(fromRequest(current));
+		HostAndPort target = fromRequest(current);
+		// remove the target from the blacklist if the timeout was reached
+		checkBlacklistTimeout (target);
+		return (targets.size() > blacklist.size()) || !blacklist.containsKey(target);
 	}
 
 	@Override
@@ -108,4 +101,25 @@ public class BlacklistingConsulFailoverStrategy implements ConsulFailoverStrateg
 		return HostAndPort.fromParts(request.url().host(), request.url().port());
 	}
 
+	/**
+	 * Removes a HostAndPort instance from the blacklist if the timeout was reached
+	 * @param target
+	 */
+	private void checkBlacklistTimeout (final HostAndPort target)
+	{
+		// If we have blacklisted this key
+		if (blacklist.containsKey(target))
+		{
+			// Get when we blacklisted this key
+			final Instant blacklistWhen = blacklist.get (target);
+
+			// If !(Duration(then, now) - timeout >=0) means that we remove this blacklist
+			// entry when the duration between
+			// the blacklist marker and now is greater than the timeout duration
+			if (!Duration.between (blacklistWhen, Instant.now ()).minusMillis (timeout).isNegative ())
+			{
+				blacklist.remove (target);
+			}
+		}
+	}
 }
